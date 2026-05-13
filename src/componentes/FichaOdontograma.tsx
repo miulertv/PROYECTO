@@ -280,7 +280,7 @@ export const FichaOdontograma: React.FC = () => {
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-clinica-texto tracking-tight">
-              Ficha Odontograma
+              Clínica Dental - Ficha de Odontograma
             </h1>
             <p className="text-sm text-clinica-textoSecundario">
               Registro interactivo de hallazgos dentales
