@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Clinica {
+  id                 String          @id @default(uuid()) @db.Uuid
+  nombre             String
+  ruc                String          @unique @db.VarChar(11)
+  direccion          String?
+  suscripcion_activa Boolean         @default(false)
+  creado_en          DateTime        @default(now())
+  actualizado_en     DateTime        @updatedAt
+  citas              Cita[]
+  pacientes          Paciente[]
+  procedimientos     Procedimiento[]
+  usuarios           Usuario[]
+
+  @@map("clinica")
+}
+
+model Usuario {
+  id                       String                @id @default(uuid()) @db.Uuid
+  correo                   String                @unique
+  clave_hash               String
+  rol                      RolUsuario
+  clinica_id               String                @db.Uuid
+  creado_en                DateTime              @default(now())
+  actualizado_en           DateTime              @updatedAt
+  citas                    Cita[]
+  odontogramas_registrados OdontogramaRegistro[]
+  clinica                  Clinica               @relation(fields: [clinica_id], references: [id])
+
+  @@map("usuario")
+}
+
+model Paciente {
+  id                   String                @id @default(uuid()) @db.Uuid
+  dni                  String                @unique @db.VarChar(8)
+  nombres              String
+  apellidos            String
+  fecha_nacimiento     DateTime              @db.Date
+  celular              String?
+  genero               String?
+  historia_clinica_nro String                @unique
+  clinica_id           String                @db.Uuid
+  creado_en            DateTime              @default(now())
+  actualizado_en       DateTime              @updatedAt
+  citas                Cita[]
+  odontogramas         OdontogramaRegistro[]
+  clinica              Clinica               @relation(fields: [clinica_id], references: [id])
+  planes_tratamiento   PlanTratamiento[]
+
+  @@map("paciente")
+}
+
+model Procedimiento {
+  id                   String               @id @default(uuid()) @db.Uuid
+  nombre               String
+  codigo_cups          String?
+  precio_base          Decimal              @db.Decimal(10, 2)
+  clinica_id           String               @db.Uuid
+  creado_en            DateTime             @default(now())
+  actualizado_en       DateTime             @updatedAt
+  detalles_tratamiento DetalleTratamiento[]
+  clinica              Clinica              @relation(fields: [clinica_id], references: [id])
+
+  @@map("procedimiento")
+}
+
+model OdontogramaRegistro {
+  id                 String   @id @default(uuid()) @db.Uuid
+  paciente_id        String   @db.Uuid
+  odontologo_id      String   @db.Uuid
+  estado_dental_json Json
+  fecha_registro     DateTime @default(now())
+  creado_en          DateTime @default(now())
+  actualizado_en     DateTime @updatedAt
+  odontologo         Usuario  @relation(fields: [odontologo_id], references: [id])
+  paciente           Paciente @relation(fields: [paciente_id], references: [id])
+
+  @@map("odontograma_registro")
+}
+
+model PlanTratamiento {
+  id                   String               @id @default(uuid()) @db.Uuid
+  paciente_id          String               @db.Uuid
+  estado               EstadoPlan           @default(PRESUPUESTO)
+  monto_total          Decimal              @default(0) @db.Decimal(10, 2)
+  monto_pagado         Decimal              @default(0) @db.Decimal(10, 2)
+  fecha_creacion       DateTime             @default(now())
+  creado_en            DateTime             @default(now())
+  actualizado_en       DateTime             @updatedAt
+  detalles_tratamiento DetalleTratamiento[]
+  pagos                Pago[]
+  paciente             Paciente             @relation(fields: [paciente_id], references: [id])
+
+  @@map("plan_tratamiento")
+}
+
+model DetalleTratamiento {
+  id               String          @id @default(uuid()) @db.Uuid
+  plan_id          String          @db.Uuid
+  procedimiento_id String          @db.Uuid
+  diente_nro       Int?
+  costo_aplicado   Decimal         @db.Decimal(10, 2)
+  estado_pago      Boolean         @default(false)
+  creado_en        DateTime        @default(now())
+  actualizado_en   DateTime        @updatedAt
+  plan_tratamiento PlanTratamiento @relation(fields: [plan_id], references: [id])
+  procedimiento    Procedimiento   @relation(fields: [procedimiento_id], references: [id])
+
+  @@map("detalle_tratamiento")
+}
+
+model Pago {
+  id               String          @id @default(uuid()) @db.Uuid
+  plan_id          String          @db.Uuid
+  monto            Decimal         @db.Decimal(10, 2)
+  metodo_pago      MetodoPago
+  fecha_pago       DateTime        @default(now())
+  creado_en        DateTime        @default(now())
+  actualizado_en   DateTime        @updatedAt
+  plan_tratamiento PlanTratamiento @relation(fields: [plan_id], references: [id])
+
+  @@map("pago")
+}
+
+model Cita {
+  id                String   @id @default(uuid()) @db.Uuid
+  paciente_id       String   @db.Uuid
+  odontologo_id     String   @db.Uuid
+  clinica_id        String   @db.Uuid
+  fecha_hora_inicio DateTime
+  fecha_hora_fin    DateTime
+  motivo            String?
+  estado            String   @default("PROGRAMADA")
+  creado_en         DateTime @default(now())
+  actualizado_en    DateTime @updatedAt
+  clinica           Clinica  @relation(fields: [clinica_id], references: [id])
+  odontologo        Usuario  @relation(fields: [odontologo_id], references: [id])
+  paciente          Paciente @relation(fields: [paciente_id], references: [id])
+
+  @@map("cita")
+}
+
+enum RolUsuario {
+  ADMIN
+  ODONTOLOGO
+  ASISTENTE
+}
+
+enum EstadoPlan {
+  PRESUPUESTO
+  EN_PROGRESO
+  FINALIZADO
+}
+
+enum MetodoPago {
+  EFECTIVO
+  TARJETA
+  TRANSFERENCIA
+}
