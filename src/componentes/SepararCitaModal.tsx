@@ -1,51 +1,132 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, Calendar, Clock, User, Clipboard, Loader2, Save } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { X, Calendar, Clock, User, Clipboard, Loader2, Save, Search, UserCheck } from "lucide-react";
+import { buscarPacientes, guardarCita } from "@/acciones";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (nuevaCita: any) => void;
+  fechaInicial?: string; // Formato YYYY-MM-DD
+  horaInicial?: string; // Formato HH:mm
 }
 
-export const SepararCitaModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
+const DOCTORES = ["Dr. Miuller Trigoso", "Dra. Ana García", "Dr. Roberto Sánchez"];
+const MOTIVOS = ["Consulta General", "Limpieza Dental", "Curación", "Extracción", "Ortodoncia", "Prótesis", "Otro"];
+
+export const SepararCitaModal: React.FC<Props> = ({ 
+  isOpen, 
+  onClose, 
+  onSuccess,
+  fechaInicial,
+  horaInicial 
+}) => {
   const [formData, setFormData] = useState({
+    pacienteId: "",
     pacienteNombre: "",
-    fecha: "",
-    hora: "09:00",
-    motivo: "",
+    fecha: fechaInicial || "",
+    hora: horaInicial || "09:00",
+    motivo: "Consulta General",
+    doctor: DOCTORES[0],
+    nota: "",
   });
 
+  const [busquedaPaciente, setBusquedaPaciente] = useState("");
+  const [sugerencias, setSugerencias] = useState<any[]>([]);
+  const [buscandoSugerencias, setBuscandoSugerencias] = useState(false);
   const [estaCargando, setEstaCargando] = useState(false);
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
+  
+  const timerBusqueda = useRef<any>(null);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        pacienteId: "",
+        pacienteNombre: "",
+        fecha: fechaInicial || "",
+        hora: horaInicial || "09:00",
+        motivo: "Consulta General",
+        doctor: DOCTORES[0],
+        nota: "",
+      });
+      setBusquedaPaciente("");
+      setSugerencias([]);
+      setMostrarSugerencias(false);
+    }
+  }, [isOpen, fechaInicial, horaInicial]);
 
   const manejarCambio = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const manejarSubmit = (e: React.FormEvent) => {
+  const manejarBusquedaPaciente = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    setBusquedaPaciente(valor);
+    setFormData(p => ({ ...p, pacienteNombre: valor, pacienteId: "" }));
+
+    if (timerBusqueda.current) clearTimeout(timerBusqueda.current);
+
+    if (valor.length >= 2) {
+      setBuscandoSugerencias(true);
+      timerBusqueda.current = setTimeout(async () => {
+        const res = await buscarPacientes(valor);
+        setSugerencias(res);
+        setBuscandoSugerencias(false);
+        setMostrarSugerencias(true);
+      }, 500);
+    } else {
+      setSugerencias([]);
+      setMostrarSugerencias(false);
+    }
+  };
+
+  const seleccionarPaciente = (p: any) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      pacienteId: p.id, 
+      pacienteNombre: `${p.nombres} ${p.apellidos}` 
+    }));
+    setBusquedaPaciente(`${p.nombres} ${p.apellidos}`);
+    setMostrarSugerencias(false);
+  };
+
+  const manejarSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.pacienteId) {
+      alert("Por favor selecciona un paciente de la lista.");
+      return;
+    }
     setEstaCargando(true);
     
-    // Simulamos la creación de la cita
-    setTimeout(() => {
-      const nuevaCita = {
-        id: Math.random().toString(36).substr(2, 9),
-        pacienteNombre: formData.pacienteNombre,
-        inicio: `${formData.fecha}T${formData.hora}:00`,
-        fin: `${formData.fecha}T${formData.hora.replace(/(\d+)/, (m) => (parseInt(m) + 1).toString().padStart(2, '0'))}:00`,
-        estado: "confirmado",
-        motivo: formData.motivo,
-      };
-      
-      onSuccess(nuevaCita);
+    try {
+      const res = await guardarCita({
+        ...formData,
+        clinicaId: "975d9ebf-5316-45c3-b44e-7e41bc4d7819", // ID de clínica por defecto
+        odontologoId: "b866a278-26c9-44b8-912e-566f66855d76", // ID de odontólogo por defecto
+      });
+
+      if (res.exito) {
+        onSuccess({
+          ...res.cita,
+          pacienteNombre: formData.pacienteNombre,
+          inicio: res.cita.fecha_hora_inicio.toISOString(),
+          fin: res.cita.fecha_hora_fin.toISOString(),
+        });
+        onClose();
+      } else {
+        alert(res.mensaje);
+      }
+    } catch (err) {
+      alert("Error al guardar la cita.");
+    } finally {
       setEstaCargando(false);
-      onClose();
-    }, 1000);
+    }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -64,19 +145,42 @@ export const SepararCitaModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }
         </div>
 
         {/* Formulario */}
-        <form onSubmit={manejarSubmit} className="p-6 space-y-4">
-          <div>
+        <form onSubmit={manejarSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
+          {/* Paciente con Autocomplete */}
+          <div className="relative">
             <label className="text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1.5">
               <User size={12} /> Paciente
             </label>
-            <input
-              required
-              name="pacienteNombre"
-              value={formData.pacienteNombre}
-              onChange={manejarCambio}
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0056b3]/20 outline-none text-sm"
-              placeholder="Nombre del paciente"
-            />
+            <div className="relative">
+              <input
+                required
+                name="pacienteNombre"
+                value={busquedaPaciente}
+                onChange={manejarBusquedaPaciente}
+                onFocus={() => busquedaPaciente.length >= 2 && setMostrarSugerencias(true)}
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0056b3]/20 outline-none text-sm pr-10"
+                placeholder="Buscar por nombre o DNI..."
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                {buscandoSugerencias ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              </div>
+            </div>
+
+            {/* Lista de sugerencias */}
+            {mostrarSugerencias && sugerencias.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                {sugerencias.map((p) => (
+                  <div 
+                    key={p.id}
+                    onClick={() => seleccionarPaciente(p)}
+                    className="px-4 py-2 hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-50 last:border-0"
+                  >
+                    <p className="text-sm font-bold text-gray-800">{p.nombres} {p.apellidos}</p>
+                    <p className="text-[10px] text-gray-400">DNI: {p.dni}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -103,24 +207,59 @@ export const SepararCitaModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }
                 onChange={manejarCambio}
                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0056b3]/20 outline-none text-sm"
               >
-                {Array.from({ length: 9 }, (_, i) => i + 9).map(h => (
-                  <option key={h} value={`${h.toString().padStart(2, '0')}:00`}>{h}:00 AM</option>
-                ))}
+                {Array.from({ length: 13 }, (_, i) => i + 9).map(h => {
+                  const hStr = h.toString().padStart(2, '0');
+                  const label = h > 12 ? `${h - 12}:00 PM` : h === 12 ? "12:00 PM" : `${h}:00 AM`;
+                  return (
+                    <React.Fragment key={h}>
+                      <option value={`${hStr}:00`}>{label}</option>
+                      <option value={`${hStr}:30`}>{h > 12 ? `${h - 12}:30 PM` : h === 12 ? "12:30 PM" : `${h}:30 AM`}</option>
+                    </React.Fragment>
+                  );
+                })}
               </select>
             </div>
           </div>
 
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1.5">
+              <UserCheck size={12} /> Doctor
+            </label>
+            <select
+              name="doctor"
+              value={formData.doctor}
+              onChange={manejarCambio}
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0056b3]/20 outline-none text-sm"
+            >
+              {DOCTORES.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1.5">
               <Clipboard size={12} /> Motivo
             </label>
-            <textarea
+            <select
               name="motivo"
               value={formData.motivo}
               onChange={manejarCambio}
-              rows={3}
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0056b3]/20 outline-none text-sm"
+            >
+              {MOTIVOS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1.5">
+              <Clipboard size={12} /> Nota de Cita
+            </label>
+            <textarea
+              name="nota"
+              value={formData.nota}
+              onChange={manejarCambio}
+              rows={2}
               className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0056b3]/20 outline-none text-sm resize-none"
-              placeholder="Ej. Limpieza, Curación..."
+              placeholder="Escribe alguna nota importante..."
             />
           </div>
 

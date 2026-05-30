@@ -18,7 +18,10 @@ export const esqueCrearPaciente = z.object({
   }),
   celular: z
     .string()
-    .regex(/^\d{9,15}$/, { message: "El celular debe ser un número válido." })
+    .transform((val) => (val === "" ? null : val))
+    .refine((val) => val === null || /^\d{9,15}$/.test(val), {
+      message: "El celular debe tener entre 9 y 15 dígitos.",
+    })
     .optional()
     .nullable(),
   genero: z.enum(["Masculino", "Femenino", "Otro"]).optional().nullable(),

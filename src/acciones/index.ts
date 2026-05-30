@@ -26,3 +26,8 @@ export type {
 } from "./calcularPresupuesto";
 export { crearPaciente } from "./crearPaciente";
 export type { RespuestaPaciente } from "./crearPaciente";
+export { buscarPacientes } from "./buscarPacientes";
+export * from "./gestionCitas";
+export { obtenerCitas } from "./obtenerCitas";
+export { obtenerPacientes, eliminarPaciente } from "./obtenerPacientes";
+export { actualizarPaciente } from "./actualizarPaciente";

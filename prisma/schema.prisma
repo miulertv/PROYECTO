@@ -164,6 +164,8 @@ model Cita {
   fecha_hora_inicio DateTime
   fecha_hora_fin    DateTime
   motivo            String?
+  doctor            String?
+  nota              String?
   estado            String   @default("PROGRAMADA") // PROGRAMADA, ATENDIDA, CANCELADA, NO_ASISTIO
   creado_en         DateTime @default(now())
   actualizado_en    DateTime @updatedAt

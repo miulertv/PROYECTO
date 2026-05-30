@@ -15,6 +15,7 @@ import {
   Loader2
 } from "lucide-react";
 import { RegistroPacienteModal } from "./RegistroPacienteModal";
+import { obtenerPacientes, eliminarPaciente } from "@/acciones";
 
 interface Paciente {
   id: string;
@@ -31,25 +32,34 @@ export const ListaPacientes: React.FC = () => {
   const [busqueda, setBusqueda] = useState("");
   const [modalAbierto, setModalAbierto] = useState(false);
   const [estaCargando, setEstaCargando] = useState(false);
+  const [pacienteSeleccionado, setPacienteSeleccionado] = useState<Paciente | null>(null);
 
-  // Simulación de carga de datos
-  useEffect(() => {
+  const cargarPacientes = async () => {
     setEstaCargando(true);
-    setTimeout(() => {
-      setPacientes([
-        {
-          id: "1",
-          dni: "41592870",
-          nombres: "Juan Carlos",
-          apellidos: "Pérez Gómez",
-          fecha_nacimiento: "1985-05-15T00:00:00Z",
-          celular: "987654321",
-          historia_clinica_nro: "HC-001"
-        }
-      ]);
-      setEstaCargando(false);
-    }, 800);
+    const res = await obtenerPacientes();
+    setPacientes(res);
+    setEstaCargando(false);
+  };
+
+  useEffect(() => {
+    cargarPacientes();
   }, []);
+
+  const manejarEditar = (paciente: Paciente) => {
+    setPacienteSeleccionado(paciente);
+    setModalAbierto(true);
+  };
+
+  const manejarEliminar = async (id: string) => {
+    if (confirm("¿Estás seguro de eliminar este paciente?")) {
+      const res = await eliminarPaciente(id);
+      if (res.exito) {
+        cargarPacientes();
+      } else {
+        alert(res.mensaje);
+      }
+    }
+  };
 
   const pacientesFiltrados = pacientes.filter(p => 
     p.nombres.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -82,7 +92,7 @@ export const ListaPacientes: React.FC = () => {
           </div>
           
           <button 
-            onClick={() => setModalAbierto(true)}
+            onClick={() => { setPacienteSeleccionado(null); setModalAbierto(true); }}
             className="flex items-center gap-2 px-5 py-2 bg-[#0056b3] text-white rounded-xl text-sm font-bold hover:bg-[#004a99] transition-all shadow-lg shadow-blue-500/20"
           >
             <UserPlus size={18} />
@@ -147,10 +157,18 @@ export const ListaPacientes: React.FC = () => {
                       >
                         <Clipboard size={18} />
                       </a>
-                      <button className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Editar">
+                      <button 
+                        onClick={() => manejarEditar(p)}
+                        className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" 
+                        title="Editar"
+                      >
                         <Edit2 size={18} />
                       </button>
-                      <button className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" title="Eliminar">
+                      <button 
+                        onClick={() => manejarEliminar(p.id)}
+                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" 
+                        title="Eliminar"
+                      >
                         <Trash2 size={18} />
                       </button>
                     </div>
@@ -168,17 +186,16 @@ export const ListaPacientes: React.FC = () => {
         </table>
       </div>
 
-      {/* Modal de Registro */}
+      {/* Modal de Registro / Edición */}
       <RegistroPacienteModal 
         isOpen={modalAbierto}
-        onClose={() => setModalAbierto(false)}
-        onSuccess={(nuevo) => {
-          setPacientes(prev => [...prev, {
-            ...nuevo,
-            fecha_nacimiento: new Date().toISOString(),
-            celular: "—",
-            historia_clinica_nro: "HC-NEW"
-          } as any]);
+        pacienteAEditar={pacienteSeleccionado}
+        onClose={() => {
+          setModalAbierto(false);
+          setPacienteSeleccionado(null);
+        }}
+        onSuccess={() => {
+          cargarPacientes();
         }}
       />
     </div>

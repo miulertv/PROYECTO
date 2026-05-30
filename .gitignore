@@ -38,3 +38,8 @@ next-env.d.ts
 # OS files
 .DS_Store
 Thumbs.db
+
+# Scratch and guides
+scratch/
+guia2.txt
+
